@@ -3,11 +3,17 @@ output "az-info" {
   
 }
 
-output "vpc" {
-  value      = data.aws_vpc.vpc.id # Data source reference
+output "vpc-id" {
+  value      = aws_vpc.main.id # Data source reference
 }
 
-output "public-subnet-id" {
-  value      = data.aws_subnets.Public_Subnets.id # Data source reference
+output "public-subnet" {
+  value      = aws_subnet.public[*].id
 }
 
+output "private-subnet" {
+  value      = aws_subnet.private[*].id
+}
+output "database-subnet" {
+  value      = aws_subnet.database[*].id
+}

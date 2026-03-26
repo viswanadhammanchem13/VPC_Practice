@@ -12,7 +12,7 @@ resource "aws_vpc" "main" {
   )
 }
 
-resource "aws_internet_gateway" "igw" {
+resource "aws_internet_gateway" "main"{
   vpc_id = aws_vpc.main.id
 
   tags = merge(
@@ -42,6 +42,7 @@ resource "aws_subnet" "public" {
   vpc_id     = aws_vpc.main.id
   cidr_block = var.public_subnet_cidrs[count.index]
   availability_zone = local.Az-info[count.index]
+  map_public_ip_on_launch = true  
 
   tags = merge(
     var.public_subnet_tags,
@@ -96,7 +97,7 @@ resource "aws_nat_gateway" "nat_gw" {
 
   # To ensure proper ordering, it is recommended to add an explicit dependency
   # on the Internet Gateway for the VPC.
-  depends_on = [aws_internet_gateway.igw]
+  depends_on = [aws_internet_gateway.main] # This ensures that the NAT Gateway is created after the Internet Gateway is available.
 }
 
 resource "aws_route_table" "public" {
@@ -139,7 +140,7 @@ resource "aws_route_table" "database" {
 resource "aws_route" "public" {
   route_table_id            = aws_route_table.public.id
   destination_cidr_block    = "0.0.0.0/0"
-  gateway_id = aws_internet_gateway.igw.id
+  gateway_id = aws_internet_gateway.main.id
 }
 
 resource "aws_route" "private" {
@@ -153,3 +154,22 @@ resource "aws_route" "database" {
   destination_cidr_block    = "0.0.0.0/0"
   nat_gateway_id = aws_nat_gateway.nat_gw.id
 }
+
+resource "aws_route_table_association" "public" {
+  count = length(var.public_subnet_cidrs)
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private" {
+  count = length(var.private_subnet_cidrs)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
+}
+
+resource "aws_route_table_association" "database" {
+  count = length(var.database_subnet_cidrs)
+  subnet_id      = aws_subnet.database[count.index].id
+  route_table_id = aws_route_table.database.id
+}
+
