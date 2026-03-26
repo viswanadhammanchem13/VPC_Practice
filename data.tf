@@ -1,4 +1,4 @@
-data "aws_vpc" "vpc-id" {
+data "aws_vpc" "vpc" {
     id = aws_vpc.main.id
  
 }
@@ -19,4 +19,7 @@ data "aws_route_table" "main" {
     values = ["true"]
   }
 }
+
+
+
 
