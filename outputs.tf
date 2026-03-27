@@ -17,3 +17,11 @@ output "private-subnet" {
 output "database-subnet" {
   value      = aws_subnet.database[*].id
 }
+
+output "default_vpc" {
+  value      = data.aws_vpc.default.id
+}
+
+output "default_route_table"{
+  value = data.aws_route_table.main.id
+}
