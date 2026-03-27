@@ -1,167 +1,115 @@
-📘 Terraform AWS VPC Module – README
+📘 Terraform AWS VPC Module
 📌 Overview
 
-This Terraform module provisions a complete AWS networking setup including:
+This module creates a complete AWS VPC infrastructure using Terraform with:
 
 VPC
-Public, Private, and Database subnets
+Public, Private, Database Subnets
 Internet Gateway (IGW)
-NAT Gateway
+NAT Gateway with Elastic IP
 Route Tables & Associations
-Elastic IP
-Optional VPC Peering with default VPC
-SSM Parameter Store integration (in caller module)
-
-This design follows a 3-tier architecture:
-Public → Internet-facing resources
-Private → Application layer
-Database → Secure backend layer
-
-🧱 Architecture Flow
-VPC
- ├── Public Subnets → IGW → Internet
- ├── Private Subnets → NAT Gateway → Internet
- ├── Database Subnets → NAT Gateway (no direct internet)
- └── Optional → Peering with Default VPC
-
-📂 Module Structure
-1. main.tf
-
-Defines all core infrastructure resources.
-
-2. data.tf
-
-Fetches existing AWS resources like:
-
-Default VPC
-Availability Zones
-Default Route Table
-
-3. locals.tf
-
-Reusable computed values:
-
-AZ selection
-Common tags
-
-4. outputs.tf
-
-Exports values to calling module.
-
-5. peering.tf
-
-Handles optional VPC peering.
-
-6. variables.tf
-
-Defines all inputs.
-
-⚙️ Resources Explained
-🌐 VPC
-resource "aws_vpc" "main"
-Purpose:
-
-Creates isolated network.
-
-Important Parameters:
-cidr_block ✅ Required → Defines IP range
-instance_tenancy → Default or dedicated (optional)
-enable_dns_hostnames → Required for private services
-🌍 Internet Gateway
-resource "aws_internet_gateway" "main"
-Purpose:
-
-Allows public subnets to access internet.
-
-Required:
-vpc_id
-💡 Elastic IP
-resource "aws_eip" "elastic_ip"
-Purpose:
-
-Static IP for NAT Gateway.
-
-Required:
-domain = "vpc"
-🚪 Subnets
-Public Subnets
-resource "aws_subnet" "public"
-Private Subnets
-resource "aws_subnet" "private"
-Database Subnets
-resource "aws_subnet" "database"
-Key Parameters:
-cidr_block ✅ Required
-availability_zone ✅ Required
-map_public_ip_on_launch → Only for public subnet
-🔁 NAT Gateway
-resource "aws_nat_gateway" "nat_gw"
-Purpose:
-
-Allows private/database subnets to access internet securely.
-
-Required:
-allocation_id (Elastic IP)
-subnet_id (Public subnet)
-Important:
-depends_on = [aws_internet_gateway.main]
-
-Ensures proper creation order.
-
-🛣️ Route Tables
-Public Route Table
-Routes → Internet via IGW
-Private & Database Route Tables
-Routes → Internet via NAT Gateway
-🔗 Route Table Associations
-
-Links subnets to route tables.
-
-🔄 VPC Peering (Optional)
-resource "aws_vpc_peering_connection"
-Purpose:
-
-Connects your VPC with default VPC.
-
-Controlled by:
-variable "is_peering_required"
-If enabled:
-Adds routes in:
-Public RT
-Private RT
-Database RT
-Default VPC RT
-📥 Data Sources
-data "aws_availability_zones"
-Fetch available AZs
-data "aws_vpc" "default"
-Fetch default VPC
-data "aws_route_table" "main"
-Fetch default route table
-🧮 Locals
+Optional VPC Peering
+SSM Parameter Store integration
+🧱 Architecture Diagram (Explanation with Comments)
+## 1. VPC Peering (Optional)
+Enables communication between Default VPC and Custom VPC
+Controlled using:
+is_peering_required = true
+Adds routes in all route tables (public, private, database, default)
+## 2. Multi-AZ Subnet Design
+Subnets are created dynamically across AZs:
 locals {
   Az-info = slice(data.aws_availability_zones.available.names, 0, 2)
 }
+Improves:
+High Availability
+Fault Tolerance
+## 3. Public Subnets (Internet Access)
+Connected to Internet Gateway
+Route:
+0.0.0.0/0 → IGW
+Key setting:
+map_public_ip_on_launch = true
+Used for:
+Bastion Host
+Load Balancer
+Public EC2
+## 4. Private & Database Subnets (Secure Access)
+No direct internet access
+Use NAT Gateway for outbound traffic
+Route:
+0.0.0.0/0 → NAT Gateway
+Why NAT?
+Secure outbound access
+No inbound exposure
+## 5. NAT Gateway + Elastic IP
+NAT Gateway placed in public subnet
+Uses:
+allocation_id = aws_eip.elastic_ip.id
 Purpose:
-Select first 2 AZs dynamically
-Avoid hardcoding
-📤 Outputs
-Output	Description
-vpc-id	Created VPC ID
-public-subnet	Public subnet IDs
-private-subnet	Private subnet IDs
-database-subnet	DB subnet IDs
-default_vpc	Default VPC ID
-default_route_table	Default route table
-🧾 Variables (Inputs)
-✅ Required Variables
+Private subnet internet access
+Static IP via Elastic IP
+## 6. Internet Gateway (IGW)
+Attached to VPC:
+vpc_id = aws_vpc.main.id
+Enables:
+Public subnet internet access
+## 7. Route Tables
+Public Route Table
+0.0.0.0/0 → IGW
+Private Route Table
+0.0.0.0/0 → NAT Gateway
+Database Route Table
+0.0.0.0/0 → NAT Gateway
+## 8. SSM Parameter Store (Outputs)
+Stores values for reuse:
+/aws/project/env/vpc-id
+/aws/project/env/public-subnet
+Benefits:
+Centralized config
+Reusable across modules
+No hardcoding
+⚙️ Resources Breakdown
+## VPC
+Creates isolated network
+Required:
+cidr_block
+Optional:
+instance_tenancy
+enable_dns_hostnames
+## Subnets
+Public Subnets
+Internet accessible
+Private Subnets
+Internal services
+Database Subnets
+Highly secure
+Required:
+cidr_block
+availability_zone
+## NAT Gateway
+Required:
+Elastic IP
+Public subnet
+Important:
+depends_on = [aws_internet_gateway.main]
+## Route Tables
+Control traffic flow
+Required:
+vpc_id
+## VPC Peering
+Optional Feature
+Enabled via:
+is_peering_required = true
+📥 Input Variables
+## Required Variables
 Variable	Description
 project	Project name
-environment	Environment (dev/prod)
-public_subnet_cidrs	Public subnet CIDRs
-private_subnet_cidrs	Private subnet CIDRs
-database_subnet_cidrs	DB subnet CIDRs
-⚙️ Optional Variables
+environment	Environment name
+public_subnet_cidrs	Public subnet ranges
+private_subnet_cidrs	Private subnet ranges
+database_subnet_cidrs	Database subnet ranges
+## Optional Variables
 Variable	Default	Purpose
 cidr_block	10.0.0.0/16	VPC range
 vpc_tags	{}	Custom tags
@@ -172,51 +120,65 @@ nat_gateway_tags	{}	NAT tags
 *_route-tags	{}	Route table tags
 vpc_peering_tags	{}	Peering tags
 is_peering_required	false	Enable peering
-📦 Caller Module Usage
-module "VPC" {
-  source = "git::https://github.com/viswanadhammanchem13/VPC_Practice.git?ref=main"
+📤 Outputs
+Output	Description
+vpc-id	VPC ID
+public-subnet	Public subnet IDs
+private-subnet	Private subnet IDs
+database-subnet	Database subnet IDs
+default_vpc	Default VPC ID
+default_route_table	Default route table
+🚀 Execution Flow (Step-by-Step)
+## Step 1
 
-  project                = var.project
-  environment            = var.environment
-  cidr_block             = var.cidr_block
-  public_subnet_cidrs    = var.public_subnet_cidrs
-  private_subnet_cidrs   = var.private_subnet_cidrs
-  database_subnet_cidrs  = var.database_subnet_cidrs
-  is_peering_required    = true
-}
-📌 SSM Parameter Store Integration
+Create VPC
 
-Stores outputs for reuse:
+## Step 2
 
-resource "aws_ssm_parameter"
-Why used:
-Centralized config storage
-Cross-module usage
-Avoid hardcoding values
-Example:
-VPC ID
-Subnet IDs
-⚠️ Key Design Decisions (Important for Interviews)
-1. Why NAT Gateway?
-Private subnets should NOT have direct internet access
-NAT provides controlled outbound connectivity
-2. Why separate subnets?
+Create Internet Gateway
+
+## Step 3
+
+Create Subnets (Public, Private, Database)
+
+## Step 4
+
+Create Elastic IP
+
+## Step 5
+
+Create NAT Gateway
+
+## Step 6
+
+Create Route Tables
+
+## Step 7
+
+Associate Subnets with Route Tables
+
+## Step 8 (Optional)
+
+Create VPC Peering
+
+## Step 9
+
+Store Outputs in SSM
+
+⚠️ Key Interview Points
+## Why NAT Gateway?
+Private subnet should not have direct internet access
+## Why separate subnets?
 Security isolation
-Better routing control
-Follows AWS best practices
-3. Why dynamic AZ selection?
-Makes module reusable across regions
-4. Why peering?
-Enables communication between:
-Default VPC
-Custom VPC
-🚀 Summary
-
-This module provides:
-
-Fully automated VPC setup
-Scalable subnet design
-Secure networking
-Optional cross-VPC communication
-Reusable and production-ready architecture
-
+Layered architecture
+## Why AZ slicing?
+Avoid hardcoding
+Multi-region support
+## Why SSM Parameter Store?
+Centralized config
+Cross-module sharing
+📌 Summary
+Production-ready VPC setup
+Secure architecture (no direct private access)
+Highly reusable Terraform module
+Supports peering and multi-AZ design
