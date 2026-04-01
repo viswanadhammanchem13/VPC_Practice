@@ -104,7 +104,7 @@ is_peering_required = true
 📥 Input Variables
 ## Required Variables
 Variable	Description
-project	Project name
+project	    Project name
 environment	Environment name
 public_subnet_cidrs	Public subnet ranges
 private_subnet_cidrs	Private subnet ranges
